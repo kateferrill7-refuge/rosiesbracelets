@@ -334,24 +334,14 @@ nav ul{display:none;}.hamburger{display:flex;}footer{flex-direction:column;text-
 <div class="toast" id="toast"></div>
 
 <script>
-/* ============================================================
-   GITHUB CONFIG — edit these two lines before you upload!
-   GH_OWNER = your GitHub username (or org name)
-   GH_REPO  = the name of this repository
-   ============================================================ */
-var GH_OWNER  = 'kateferrill7-refuge';
-var GH_REPO   = 'rosiesbracelets';
-var GH_BRANCH = 'main';
-var DATA_PATH = 'data.json';
-
 var CART_KEY = 'rosies_cart_v1';
+var DATA_PATH = 'data.json';
 var bracelets = [];
 var cart = [];
 var adminOpen = false;
 var editingId = null;
 var pendingPhotoData = null;   // data URL, used for preview + upload
-var pendingPhotoExt  = null;   // 'jpg' etc
-var ghToken = null;            // GitHub token, kept ONLY in memory for this tab
+var adminPassword = null;      // kept only in memory for this tab
 
 /* ── DATA (shared, lives in the GitHub repo as data.json) ── */
 function loadData() {
@@ -363,39 +353,29 @@ function loadData() {
   updateCartBadge();
 }
 
-/* ── GitHub API helpers ── */
-function ghHeaders() {
-  return { 'Authorization': 'token ' + ghToken, 'Accept': 'application/vnd.github+json' };
-}
-function ghContentsUrl(path) {
-  return 'https://api.github.com/repos/' + GH_OWNER + '/' + GH_REPO + '/contents/' + path;
-}
-function ghGetSha(path) {
-  return fetch(ghContentsUrl(path) + '?ref=' + GH_BRANCH, { headers: ghHeaders() })
-    .then(function(res){ if (res.status === 404) return null; if (!res.ok) throw new Error('GitHub error checking ' + path); return res.json().then(function(j){ return j.sha; }); });
-}
-function ghPutFile(path, base64Content, message) {
-  return ghGetSha(path).then(function(sha){
-    var body = { message: message, content: base64Content, branch: GH_BRANCH };
-    if (sha) body.sha = sha;
-    return fetch(ghContentsUrl(path), { method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, ghHeaders()), body: JSON.stringify(body) });
-  }).then(function(res){
-    if (!res.ok) return res.json().then(function(j){ throw new Error(j.message || 'GitHub save failed'); });
-    return res.json();
-  });
-}
-function utf8ToBase64(str) { return btoa(unescape(encodeURIComponent(str))); }
-
 function ensureAdminAuth() {
-  if (ghToken) return true;
-  if (GH_OWNER === 'YOUR-GITHUB-USERNAME' || GH_REPO === 'YOUR-REPO-NAME') {
-    alert('Before using Manage Shop, open this file and set GH_OWNER and GH_REPO near the top of the <script> to your GitHub username and repo name.');
-    return false;
-  }
-  var t = prompt('Paste your GitHub personal access token (Contents: Read & write permission). It stays only in this browser tab and is never saved or uploaded anywhere.');
-  if (!t) return false;
-  ghToken = t.trim();
+  if (adminPassword) return true;
+  var p = prompt('Enter the shop password to manage listings:');
+  if (!p) return false;
+  adminPassword = p;
   return true;
+}
+
+function callSaveApi(payload) {
+  payload.password = adminPassword;
+  return fetch('/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function(res){
+    return res.json().then(function(j){
+      if (!res.ok) {
+        if (res.status === 401) adminPassword = null; // bad password, ask again next time
+        throw new Error(j.error || 'Save failed');
+      }
+      return j;
+    });
+  });
 }
 
 function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch(e) {} }
@@ -515,38 +495,25 @@ function saveBracelet() {
 
   var statusEl = document.getElementById('adminStatus');
   var saveBtn = document.querySelector('.btn-save');
-  statusEl.textContent = 'Saving to GitHub…';
+  statusEl.textContent = 'Saving…';
   saveBtn.disabled = true;
 
   var isNewPhoto = pendingPhotoData && pendingPhotoData.indexOf('data:') === 0;
-  var photoUploadPromise = Promise.resolve(editingId !== null ? (bracelets.find(function(x){return x.id===editingId;}) || {}).photo : null);
+  var payload = {
+    action: 'save',
+    editingId: editingId,
+    bracelet: { name: name, price: price, desc: desc },
+    photoBase64: isNewPhoto ? pendingPhotoData.split(',')[1] : (pendingPhotoData === null ? null : undefined)
+  };
 
-  if (isNewPhoto) {
-    var base64 = pendingPhotoData.split(',')[1];
-    var filename = 'images/' + Date.now() + '.jpg';
-    photoUploadPromise = ghPutFile(filename, base64, 'Add photo: ' + name).then(function(){ return filename; });
-  } else if (pendingPhotoData === null) {
-    photoUploadPromise = Promise.resolve(null); // photo removed
-  }
-
-  photoUploadPromise.then(function(photoPath){
-    var updated = bracelets.slice();
-    if (editingId !== null) {
-      var idx = updated.findIndex(function(x){return x.id===editingId;});
-      if (idx !== -1) updated[idx] = {id:editingId, name:name, price:price, desc:desc, photo:photoPath};
-    } else {
-      updated.push({id:Date.now(), name:name, price:price, desc:desc, photo:photoPath});
-    }
-    return ghPutFile(DATA_PATH, utf8ToBase64(JSON.stringify(updated, null, 2)), (editingId !== null ? 'Update' : 'Add') + ' bracelet: ' + name)
-      .then(function(){ return updated; });
-  }).then(function(updated){
-    bracelets = updated;
+  callSaveApi(payload).then(function(j){
+    bracelets = j.bracelets;
     renderShop();
     cancelEdit();
     showToast('"' + name + '" saved! It may take a minute to appear live on the site.');
   }).catch(function(err){
     console.error(err);
-    statusEl.textContent = 'Save failed: ' + err.message + ' (check your token and GH_OWNER/GH_REPO settings)';
+    statusEl.textContent = 'Save failed: ' + err.message;
   }).finally(function(){
     saveBtn.disabled = false;
   });
@@ -557,11 +524,10 @@ function delBracelet(id) {
   if (!b || !confirm('Remove "' + b.name + '" from the shop? (Use this once it sells / is purchased.)')) return;
   if (!ensureAdminAuth()) return;
 
-  var updated = bracelets.filter(function(x){return x.id!==id;});
   showToast('Removing "' + b.name + '"…');
-  ghPutFile(DATA_PATH, utf8ToBase64(JSON.stringify(updated, null, 2)), 'Remove sold bracelet: ' + b.name)
-    .then(function(){
-      bracelets = updated;
+  callSaveApi({ action: 'delete', id: id })
+    .then(function(j){
+      bracelets = j.bracelets;
       cart = cart.filter(function(x){return x.id!==id;});
       saveCart(); renderShop(); updateCartBadge();
       showToast('"' + b.name + '" removed — live for everyone shortly.');
