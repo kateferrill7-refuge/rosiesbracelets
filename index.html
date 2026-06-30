@@ -300,7 +300,7 @@ nav ul{display:none;}.hamburger{display:flex;}footer{flex-direction:column;text-
   <div class="section-label" style="color:rgba(255,255,255,.6)">Make it yours</div>
   <h2>Custom orders welcome</h2>
   <p>Want a specific color scheme, a name in letter beads, or a bracelet that matches your bridesmaid dresses? Send me a message and we'll figure it out together.</p>
-  <a href="mailto:rosie@rosiesbracelets.com" class="btn">Send a Message</a>
+  <a href="mailto:rosierebecca771@icloud.com" class="btn">Send a Message</a>
 </section>
 
 <section class="reviews" id="reviews">
@@ -316,7 +316,7 @@ nav ul{display:none;}.hamburger{display:flex;}footer{flex-direction:column;text-
 <footer>
   <div class="footer-logo">Rosie's Bracelets</div>
   <p>Made with love, one bead at a time &#128255;</p>
-  <div class="footer-links"><a href="#shop">Shop</a><a href="#custom">Custom Orders</a><a href="mailto:rosie@rosiesbracelets.com">Contact</a></div>
+  <div class="footer-links"><a href="#shop">Shop</a><a href="#custom">Custom Orders</a><a href="mailto:rosierebecca771@icloud.com">Contact</a></div>
 </footer>
 
 <!-- CART DRAWER -->
@@ -339,8 +339,8 @@ nav ul{display:none;}.hamburger{display:flex;}footer{flex-direction:column;text-
    GH_OWNER = your GitHub username (or org name)
    GH_REPO  = the name of this repository
    ============================================================ */
-var GH_OWNER  = 'YOUR-GITHUB-USERNAME';
-var GH_REPO   = 'YOUR-REPO-NAME';
+var GH_OWNER  = 'kateferrill7-refuge';
+var GH_REPO   = 'rosiesbracelets';
 var GH_BRANCH = 'main';
 var DATA_PATH = 'data.json';
 
@@ -660,13 +660,13 @@ function removeItem(id) {
 function checkoutPayPal(total, encodedItems) {
   var note = 'Order from Rosie\'s Bracelets: ' + decodeURIComponent(encodedItems) + ' | Total: $' + total;
   // Opens PayPal.me — Rosie should replace YOUR_PAYPAL_USERNAME with her actual PayPal.me link
-  var url = 'https://www.paypal.com/paypalme/YOURPAYPALHERE/' + total + '?currencyCode=USD';
+  var url = 'https://www.paypal.com/paypalme/katedesantis764/' + total + '?currencyCode=USD';
   // Also open a pre-filled email as backup so Rosie gets order details
   var emailBody = 'Hi Rosie! I just paid $' + total + ' via PayPal for: ' + decodeURIComponent(encodedItems) + '. Please confirm my order!';
   window.open(url, '_blank');
   showToast('PayPal opened! Also send Rosie an email with your order.');
   setTimeout(function(){
-    window.location.href = 'mailto:rosie@rosiesbracelets.com?subject=Order+Confirmation&body=' + encodeURIComponent(emailBody);
+    window.location.href = 'mailto:rosierebecca771@icloud.com?subject=Order+Confirmation&body=' + encodeURIComponent(emailBody);
   }, 1200);
 }
 
