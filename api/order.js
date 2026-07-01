@@ -1,20 +1,40 @@
 // /api/order.js
-// Sends order emails via Gmail SMTP using nodemailer.
-// Requires GMAIL_USER and GMAIL_PASS (app password) env vars in Vercel.
+// Sends order emails via Brevo (brevo.com).
+// Requires BREVO_API_KEY env var in Vercel.
 
-const nodemailer = require('nodemailer');
+const ROSIE_EMAIL    = process.env.ROSIE_EMAIL || 'rosierebecca771@icloud.com';
+const BREVO_API_KEY  = process.env.BREVO_API_KEY;
+const FROM_NAME      = "Rosie's Bracelets";
+const FROM_EMAIL     = process.env.FROM_EMAIL || ROSIE_EMAIL;
 
-const ROSIE_EMAIL = process.env.ROSIE_EMAIL || 'rosierebecca771@icloud.com';
-const GMAIL_USER  = process.env.GMAIL_USER;
-const GMAIL_PASS  = process.env.GMAIL_PASS;
+async function sendEmail({ toEmail, toName, subject, html }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': BREVO_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      to: [{ email: toEmail, name: toName }],
+      subject,
+      htmlContent: html
+    })
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.message || 'Email send failed: ' + res.status);
+  }
+  return res.json();
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
-  if (!GMAIL_USER || !GMAIL_PASS) {
-    res.status(500).json({ error: 'Server is missing GMAIL_USER or GMAIL_PASS environment variables.' });
+  if (!BREVO_API_KEY) {
+    res.status(500).json({ error: 'Server is missing the BREVO_API_KEY environment variable.' });
     return;
   }
 
@@ -27,18 +47,13 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: GMAIL_USER, pass: GMAIL_PASS }
-  });
-
   const orderDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   try {
     // Notification to Rosie
-    await transporter.sendMail({
-      from: '"Rosie\'s Bracelets" <' + GMAIL_USER + '>',
-      to: ROSIE_EMAIL,
+    await sendEmail({
+      toEmail: ROSIE_EMAIL,
+      toName: 'Rosie',
       subject: 'New order from ' + name + ' - $' + total,
       html: `
         <div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;color:#3a2e2e;">
@@ -56,10 +71,10 @@ module.exports = async (req, res) => {
     });
 
     // Confirmation to customer
-    await transporter.sendMail({
-      from: '"Rosie\'s Bracelets" <' + GMAIL_USER + '>',
-      to: email,
-      subject: 'Your order from Rosie\'s Bracelets',
+    await sendEmail({
+      toEmail: email,
+      toName: name,
+      subject: "Your order from Rosie's Bracelets",
       html: `
         <div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;color:#3a2e2e;">
           <h2 style="color:#b07b7b;font-size:1.4rem;">Thanks for your order, ${name}!</h2>
