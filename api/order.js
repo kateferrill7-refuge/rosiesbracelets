@@ -14,8 +14,8 @@ async function sendEmail({ toEmail, toName, subject, html }) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
+      personalizations: [{ to: [{ email: toEmail, name: toName }] }],
       from: { email: ROSIE_EMAIL, name: FROM_NAME },
-      to: [{ email: toEmail, name: toName }],
       subject,
       content: [{ type: 'text/html', value: html }]
     })
