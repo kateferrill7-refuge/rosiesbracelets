@@ -1,31 +1,30 @@
 // /api/order.js
-// Sends order emails via Brevo (brevo.com).
-// Requires BREVO_API_KEY env var in Vercel.
+// Sends order emails via SendGrid.
+// Requires SENDGRID_API_KEY env var in Vercel.
 
-const ROSIE_EMAIL    = process.env.ROSIE_EMAIL || 'rosierebecca771@icloud.com';
-const BREVO_API_KEY  = process.env.BREVO_API_KEY;
-const FROM_NAME      = "Rosie's Bracelets";
-const FROM_EMAIL     = process.env.FROM_EMAIL || ROSIE_EMAIL;
+const ROSIE_EMAIL       = process.env.ROSIE_EMAIL || 'rosierebecca771@icloud.com';
+const SENDGRID_API_KEY  = process.env.SENDGRID_API_KEY;
+const FROM_NAME         = "Rosie's Bracelets";
 
 async function sendEmail({ toEmail, toName, subject, html }) {
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
-      'api-key': BREVO_API_KEY,
+      'Authorization': 'Bearer ' + SENDGRID_API_KEY,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      from: { email: ROSIE_EMAIL, name: FROM_NAME },
       to: [{ email: toEmail, name: toName }],
       subject,
-      htmlContent: html
+      content: [{ type: 'text/html', value: html }]
     })
   });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
-    throw new Error(j.message || 'Email send failed: ' + res.status);
+    const msg = (j.errors && j.errors[0] && j.errors[0].message) || ('Email send failed: ' + res.status);
+    throw new Error(msg);
   }
-  return res.json();
 }
 
 module.exports = async (req, res) => {
@@ -33,8 +32,8 @@ module.exports = async (req, res) => {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
-  if (!BREVO_API_KEY) {
-    res.status(500).json({ error: 'Server is missing the BREVO_API_KEY environment variable.' });
+  if (!SENDGRID_API_KEY) {
+    res.status(500).json({ error: 'Server is missing the SENDGRID_API_KEY environment variable.' });
     return;
   }
 
