@@ -1,10 +1,30 @@
 // /api/order.js
-// Sends order emails via SendGrid.
+// Sends order emails via SendGrid and removes sold bracelets from Blob storage.
 // Requires SENDGRID_API_KEY env var in Vercel.
+
+const { put, head } = require('@vercel/blob');
 
 const ROSIE_EMAIL       = process.env.ROSIE_EMAIL || 'rosierebecca771@icloud.com';
 const SENDGRID_API_KEY  = process.env.SENDGRID_API_KEY;
 const FROM_NAME         = "Rosie's Bracelets";
+const DATA_PATH         = 'data.json';
+
+async function readData() {
+  const info = await head(DATA_PATH).catch(() => null);
+  if (!info) return [];
+  const r = await fetch(info.url + '?t=' + Date.now());
+  if (!r.ok) return [];
+  return r.json();
+}
+
+async function writeData(bracelets) {
+  await put(DATA_PATH, JSON.stringify(bracelets, null, 2), {
+    access: 'public',
+    contentType: 'application/json',
+    addRandomSuffix: false,
+    allowOverwrite: true
+  });
+}
 
 async function sendEmail({ toEmail, toName, subject, html }) {
   const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
@@ -40,7 +60,7 @@ module.exports = async (req, res) => {
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
 
-  const { name, email, total, items } = body || {};
+  const { name, email, total, items, ids } = body || {};
   if (!name || !email || !total || !items) {
     res.status(400).json({ error: 'Missing order details.' });
     return;
@@ -49,7 +69,7 @@ module.exports = async (req, res) => {
   const orderDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   try {
-    // Notification to Rosie
+    // Send notification to Rosie
     await sendEmail({
       toEmail: ROSIE_EMAIL,
       toName: 'Rosie',
@@ -69,7 +89,7 @@ module.exports = async (req, res) => {
       `
     });
 
-    // Confirmation to customer
+    // Send confirmation to customer
     await sendEmail({
       toEmail: email,
       toName: name,
@@ -89,9 +109,17 @@ module.exports = async (req, res) => {
       `
     });
 
-    res.status(200).json({ ok: true });
+    // Remove purchased items from the shop
+    let updatedBracelets = [];
+    if (ids && ids.length > 0) {
+      const current = await readData();
+      updatedBracelets = current.filter(b => !ids.includes(b.id));
+      await writeData(updatedBracelets);
+    }
+
+    res.status(200).json({ ok: true, bracelets: updatedBracelets });
   } catch (err) {
-    console.error('Email error:', err);
-    res.status(500).json({ error: err.message || 'Could not send confirmation email.' });
+    console.error('Order error:', err);
+    res.status(500).json({ error: err.message || 'Could not process order.' });
   }
 };
